@@ -1,0 +1,467 @@
+#### GENERAL SETUP ####
+
+# Path
+path <- file.path("C:/Users/mgram/Repos/MMCAR")
+setwd(file.path(path))
+
+# Load data
+load("./PreProcessing/SEL_data_DEF.Rdata")
+
+# Load package
+## Plot
+library(plot.matrix)
+library(viridis)
+## Data handling
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+library(forcats)
+## Sampling
+library(MASS)
+## Correlation
+library(corpcor)
+# library(correlation)
+library(MASS)
+## Spatial
+library(rgeos)
+library(rgdal)
+## Matrices
+library(Matrix)
+## Stan
+library(rstan)
+library(shinystan)
+library(loo)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+# Sys.setenv(LOCAL_CPPFLAGS = '-march=corei7 -mtune=corei7')
+## MCMC
+library(bayesplot)
+
+# Posterior fits paths
+res_path <- file.path(
+  "C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_data_Review"
+)
+
+# Load functions
+source("Scripts/CARMM_Functions.R")
+source("Scripts/Posterior_checks.R")
+source("Scripts/CARMM_Structure_Functions.R")
+
+# Data
+## Centre covariates
+X_cent <- apply(
+X_msoa[, c("perc_sa", "imd")], 2, function(x) (x - min(x))/diff(range(x))
+)
+## Bind
+d_sel <- list(
+# Number of areas
+n = nrow(W_sel),
+# Covariates
+k = ncol(X_cent),
+X_cov = X_cent,
+# Adjacecncy
+W_n = sum(W_sel) / 2,
+# number of neighbor pairs
+W = W_sel,
+# Multiple membership
+m = nrow(H_sel),
+H = H_sel,
+# Outcome
+y = outcomes$prev,
+log_offset = log(outcomes$exp_prev)
+)
+
+l_RR_names <- sapply(1:152, function(x) paste("l_RR[", x, "]", sep = ""))
+
+# # REV
+# load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/MANUSCRIPT_IMPORTANT/SEL_FIT_STAN_COV_NB_CENT_2021-07-16.RData")
+# load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/MANUSCRIPT_IMPORTANT/SEL_FIT_STAN_GLM_NB_CENT_2021-07-16.RData")
+# load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/MANUSCRIPT_IMPORTANT/SEL_FIT_STAN_ICAR_NB_CENT_2021-07-16.RData")
+# 
+# # Mixed replicates
+# load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_MIXED_REP_CENT_2022-02-16.RData")
+#
+
+#### LOAD RESULTS ####
+
+res_date <- "2022-03-29"
+
+# Posteriors
+load(file.path(
+res_path, paste("Fit_GLM-MM_", res_date, ".RData", sep = "")
+))
+load(file.path(
+res_path, paste("Fit_GLM-MM_Unst_", res_date, ".RData", sep = "")
+))
+load(file.path(
+res_path, paste("Fit_CAR-MM_", res_date, ".RData", sep = "")
+))
+load(file.path(
+res_path, paste("Fit_ICAR-MM_", res_date, ".RData", sep = "")
+))
+
+# Mixed replicates
+load(file.path(
+  res_path, paste("REP_MIX_", res_date, ".RData", sep = "")
+))
+#
+
+#### RESULTS SUMMARY - MEAN ####
+
+# GLM-MM UNSTRUCTURED
+# print(
+#   fit_glm_unst, pars = c('gamma', 'beta', 'tau', 'psi', 'ppp', 'lp__'), 
+#   probs = c(0.025, 0.05, 0.5, 0.95, 0.975)
+# )
+
+# GLM-MM
+xlsx::write.xlsx(
+  x = summary(fit_glm, pars = c('gamma', 'beta', 'psi', 'ppp', 'lp__'),
+              probs = c(0.025, 0.05, 0.5, 0.95, 0.975))$summary, 
+  append = T, sheet = "post_glm",
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+
+
+# CAR-MM
+xlsx::write.xlsx(
+  x = summary(fit_car, 
+              pars = c('gamma', 'beta', 'alpha', 'tau', 'psi', 'ppp', 'lp__'),
+              probs = c(0.025, 0.05, 0.5, 0.95, 0.975))$summary, 
+  append = T, sheet = "post_car",
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+
+# ICAR-MM
+xlsx::write.xlsx(
+  x = summary(fit_icar,
+              pars = c('gamma', 'beta', 'tau', 'psi', 'ppp', 'lp__'),
+              probs = c(0.025, 0.05, 0.5, 0.95, 0.975))$summary, 
+  append = T, sheet = "post_icar",
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+#
+
+#### RESULTS SUMMARY - RR ####
+
+# GLM-MM
+RR_glm <- apply(
+  as.matrix(fit_glm)[,l_RR_names], 2,
+  function(x) 
+    c(mean(exp(x)), quantile(exp(x), probs = c(0.025, 0.05, 0.5, 0.95, 0.975)))
+) %>% as.matrix() %>% t()
+rownames(RR_glm) <- colnames(d_sel$H)
+colnames(RR_glm) <- c("mean", "2.5%", "5%", "50%", "95%", "97.5%")
+xlsx::write.xlsx(
+  RR_glm, sheet = "GLM RR", append = T,
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+
+# CAR-MM
+RR_car <- apply(
+  as.matrix(fit_car)[,l_RR_names], 2,
+  function(x) 
+    c(mean(exp(x)), quantile(exp(x), probs = c(0.025, 0.05, 0.5, 0.95, 0.975)))
+) %>% as.matrix() %>% t()
+rownames(RR_car) <- colnames(d_sel$H)
+colnames(RR_car) <- c("mean", "2.5%", "5%", "50%", "95%", "97.5%")
+xlsx::write.xlsx(
+  RR_car, sheet = "CAR RR", append = T,
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+
+# ICAR-MM
+RR_icar <- apply(
+  as.matrix(fit_icar)[,l_RR_names], 2,
+  function(x) 
+    c(mean(exp(x)), quantile(exp(x), probs = c(0.025, 0.05, 0.5, 0.95, 0.975)))
+) %>% as.matrix() %>% t()
+rownames(RR_icar) <- colnames(d_sel$H)
+colnames(RR_icar) <- c("mean", "2.5%", "5%", "50%", "95%", "97.5%")
+xlsx::write.xlsx(
+  RR_icar, sheet = "ICAR RR", append = T,
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+#
+
+#### MORAN ####
+
+# GLM
+moran_glm <- apply(
+  exp(as.matrix(fit_glm)[,l_RR_names]), 1, 
+  function(x) moran_test(x, W = d_sel$W)
+)
+mat_moran_glm <- as.matrix(
+  c(mean(moran_glm), 
+    quantile(moran_glm, probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+  )
+)
+rownames(mat_moran_glm)[1] <- "mean"
+xlsx::write.xlsx(
+  x = mat_moran_glm, append = T, sheet = "moran_glm",
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+
+# CAR
+moran_car <- apply(
+  exp(as.matrix(fit_car)[,l_RR_names]), 1, 
+  function(x) moran_test(x, W = d_sel$W)
+)
+mat_moran_car <- as.matrix(
+  c(mean(moran_car), 
+    quantile(moran_car, probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+  )
+)
+rownames(mat_moran_car)[1] <- "mean"
+xlsx::write.xlsx(
+  x = mat_moran_car, append = T, sheet = "moran_car",
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+
+# ICAR
+moran_icar <- apply(
+  exp(as.matrix(fit_icar)[,l_RR_names]), 1, 
+  function(x) moran_test(x, W = d_sel$W)
+)
+mat_moran_icar <- as.matrix(
+  c(mean(moran_icar), 
+    quantile(moran_icar, probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+  )
+)
+rownames(mat_moran_icar)[1] <- "mean"
+xlsx::write.xlsx(
+  x = mat_moran_car, append = T, sheet = "moran_icar",
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+#
+
+#### RATIO BTWN 90% PERC AND 10% PERC ####
+
+# GLM-MM
+RR_glm_perc <- apply(
+  as.matrix(fit_glm)[,l_RR_names], 1,
+  function(x) quantile(exp(x), probs = c(.1, .9))
+) %>% as.matrix() %>% t()
+RR_ratio_glm <- apply(RR_glm_perc, 1, function(x) x[2]/x[1])
+## As matrix
+mat_ratio_glm <- as.matrix(
+  c(mean(RR_ratio_glm), 
+    quantile(RR_ratio_glm, probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+  )
+)
+rownames(mat_ratio_glm)[1] <- "mean"
+xlsx::write.xlsx(
+  x = mat_ratio_glm, append = T, sheet = "ratio_glm",
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+
+# CAR-MM
+RR_car_perc <- apply(
+  as.matrix(fit_car)[,l_RR_names], 1,
+  function(x) quantile(exp(x), probs = c(.1, .9))
+) %>% as.matrix() %>% t()
+RR_ratio_car <- apply(RR_car_perc, 1, function(x) x[2]/x[1])
+## As matrix
+mat_ratio_car <- as.matrix(
+  c(mean(RR_ratio_car), 
+    quantile(RR_ratio_car, probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+  )
+)
+rownames(mat_ratio_car)[1] <- "mean"
+xlsx::write.xlsx(
+  x = mat_ratio_car, append = T, sheet = "ratio_car",
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+
+# ICAR-MM
+RR_icar_perc <- apply(
+  as.matrix(fit_icar)[,l_RR_names], 1,
+  function(x) quantile(exp(x), probs = c(.1, .9))
+) %>% as.matrix() %>% t()
+RR_ratio_icar <- apply(RR_icar_perc, 1, function(x) x[2]/x[1])
+## As matrix
+mat_ratio_icar <- as.matrix(
+  c(mean(RR_ratio_icar), 
+    quantile(RR_ratio_icar, probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+  )
+)
+rownames(mat_ratio_icar)[1] <- "mean"
+xlsx::write.xlsx(
+  x = mat_ratio_icar, append = T, sheet = "ratio_icar",
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+#
+
+#### RESULTS SUMMARY - RR ABOVE THRESHOLD and quintiles ####
+
+# Threshold for MCMC iterations
+r_0 <- log(1)
+
+# Prob over threshold
+## GLM-MM
+p_RR_glm <- apply(
+  as.matrix(fit_glm)[,l_RR_names], 2, 
+  function(x) sum(x > r_0)/length(x)
+) %>% as.matrix() %>% t()
+## CAR-MM
+p_RR_car <- apply(
+  as.matrix(fit_car)[,l_RR_names], 2,
+  function(x) sum(x > r_0)/length(x)
+) %>% as.matrix() %>% t()
+## ICAR-MM
+p_RR_icar <- apply(
+  as.matrix(fit_icar)[,l_RR_names], 2,
+  function(x) sum(x > r_0)/length(x)
+) %>% as.matrix() %>% t()
+
+# Bind results and save
+## Bind
+p_RR <- cbind(
+  as.numeric(p_RR_glm), as.numeric(p_RR_car), as.numeric(p_RR_icar),
+  RR_glm[,"mean"], RR_car[,"mean"], RR_icar[,"mean"]
+)
+rownames(p_RR) <- colnames(d_sel$H)
+colnames(p_RR) <- c(
+  "P over 1 GLM", "P over 1 CAR", "P over 1 ICAR",
+  "Mean GLM", "Mean CAR", "Mean ICAR"
+)
+
+# Quintiles
+## Cutoffs
+quint_glm <- quantile(RR_glm[, "mean"], probs = c(.2, .4, .6, .8))
+quint_car <- quantile(RR_car[, "mean"], probs = c(.2, .4, .6, .8))
+quint_icar <- quantile(RR_icar[, "mean"], probs = c(.2, .4, .6, .8))
+p_RR <- p_RR %>% as_tibble() %>% 
+  mutate(
+    `Quint GLM` = case_when(
+      `Mean GLM` <= quint_glm[1] ~ "1st",
+      `Mean GLM` <= quint_glm[2] & `Mean GLM` > quint_glm[1] ~ "2nd",
+      `Mean GLM` <= quint_glm[3] & `Mean GLM` > quint_glm[2] ~ "3rd",
+      `Mean GLM` <= quint_glm[4] & `Mean GLM` > quint_glm[3] ~ "4th",
+      `Mean GLM` > quint_glm[4] ~ "5th",
+    ),
+    `Quint CAR` = case_when(
+      `Mean CAR` <= quint_car[1] ~ "1st",
+      `Mean CAR` <= quint_car[2] & `Mean CAR` > quint_car[1] ~ "2nd",
+      `Mean CAR` <= quint_car[3] & `Mean CAR` > quint_car[2] ~ "3rd",
+      `Mean CAR` <= quint_car[4] & `Mean CAR` > quint_car[3] ~ "4th",
+      `Mean CAR` > quint_car[4] ~ "5th",
+    ),
+    `Quint ICAR` = case_when(
+      `Mean ICAR` <= quint_icar[1] ~ "1st",
+      `Mean ICAR` <= quint_icar[2] & `Mean ICAR` > quint_icar[1] ~ "2nd",
+      `Mean ICAR` <= quint_icar[3] & `Mean ICAR` > quint_icar[2] ~ "3rd",
+      `Mean ICAR` <= quint_icar[4] & `Mean ICAR` > quint_icar[3] ~ "4th",
+      `Mean ICAR` > quint_icar[4] ~ "5th",
+    )
+  )
+## Summaries
+### GLM
+m_quint_glm <- p_RR %>% group_by(`Quint GLM`) %>% 
+  summarise(`Mean quint GLM` = mean(`Mean GLM`))
+### CAR
+m_quint_car <- p_RR %>% group_by(`Quint CAR`) %>% 
+  summarise(`Mean quint CAR` = mean(`Mean CAR`)) 
+### ICAR
+m_quint_icar <- p_RR %>% group_by(`Quint ICAR`) %>% 
+  summarise(`Mean quint ICAR` = mean(`Mean ICAR`))
+
+# Final merge
+p_RR <- left_join(p_RR, m_quint_glm, by = "Quint GLM")
+p_RR <- left_join(p_RR, m_quint_car, by = "Quint CAR")
+p_RR <- left_join(p_RR, m_quint_icar, by = "Quint ICAR") %>% as.data.frame()
+## Rownames
+rownames(p_RR) <- colnames(d_sel$H)
+
+## Save
+xlsx::write.xlsx(
+  p_RR, sheet = "RR over 1 and Quintiles", append = T,
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+#
+
+#### RR BY COVARIATES QUINTILES ####
+
+# Areas by quintiles
+quint_sa <- quantile(X_msoa[, "perc_sa"], probs = c(.2, .4, .6, .8))
+quint_imd <- quantile(X_msoa[, "imd"], probs = c(.2, .4, .6, .8))
+## Assign areas by quintile
+quint_areas <- X_msoa %>% as_tibble() %>% 
+  mutate(
+    quint_sa = case_when(
+      perc_sa <= quint_sa[1] ~ "1st",
+      perc_sa <= quint_sa[2] & perc_sa > quint_sa[1] ~ "2nd",
+      perc_sa <= quint_sa[3] & perc_sa > quint_sa[2] ~ "3rd",
+      perc_sa <= quint_sa[4] & perc_sa > quint_sa[3] ~ "4th",
+      perc_sa > quint_sa[4] ~ "5th",
+    ),
+    quint_imd = case_when(
+      imd <= quint_imd[1] ~ "1st",
+      imd <= quint_imd[2] & imd > quint_imd[1] ~ "2nd",
+      imd <= quint_imd[3] & imd > quint_imd[2] ~ "3rd",
+      imd <= quint_imd[4] & imd > quint_imd[3] ~ "4th",
+      imd > quint_imd[4] ~ "5th",
+    )
+  )
+## Summaries
+## Merge ICAR
+quint_areas <- merge(
+  quint_areas, 
+  data.frame(
+    msoa_code = colnames(d_sel$H), 
+    mean_rr = as.numeric(RR_icar[, "mean"])
+  ),
+  by = "msoa_code"
+)
+### ICAR
+m_quint_icar_sa <- quint_areas %>% group_by(quint_sa) %>% 
+  summarise(`Mean quint ICAR SA pop` = mean(mean_rr)) %>% 
+  mutate(Quintile = quint_sa, .keep = "unused")
+m_quint_icar_imd <- quint_areas %>% group_by(quint_imd) %>% 
+  summarise(`Mean quint ICAR IMD` = mean(mean_rr)) %>% 
+  mutate(Quintile = quint_imd, .keep = "unused")
+
+# Final merge
+quint_cov_res <- left_join(m_quint_icar_sa, m_quint_icar_imd, by = "Quintile")
+## Sort columns
+quint_cov_res <- quint_cov_res[
+  , c("Quintile", "Mean quint ICAR SA pop", "Mean quint ICAR IMD")
+]
+
+## Save
+xlsx::write.xlsx(
+  quint_cov_res, sheet = "RR by covariates quintiles", append = T,
+  file = "DataAnalysis/DescriptivePosteriors/SEL_descriptives_220329.xlsx"
+)
+#
+
+#### HISTOGRAMS ####
+
+hist_glm <- ggplot(aes(x = mean), data = as.data.frame(RR_glm)) +
+  geom_histogram(bins = 20, color = "#000000", fill = "#0099F8") + theme_bw() + 
+  scale_x_continuous(breaks = seq(0.4, 2, by = .1)) +
+  ggtitle("Posterior means RR for GLM-MM") +
+  xlab("RR") + ylab("Frequency")
+ggsave(
+  plot = hist_glm, file = "DataAnalysis/DescriptivePosteriors/hist_glm.png"
+)
+
+hist_car <- ggplot(aes(x = mean), data = as.data.frame(RR_car)) +
+  geom_histogram(bins = 20, color = "#000000", fill = "#0099F8") + theme_bw() +
+  scale_x_continuous(breaks = seq(0.4, 2, by = .1)) +
+  ggtitle("Posterior means RR for CAR-MM") +
+  xlab("RR") + ylab("Frequency")
+ggsave(
+  plot = hist_car, file = "DataAnalysis/DescriptivePosteriors/hist_car.png"
+)
+
+hist_icar <- ggplot(aes(x = mean), data = as.data.frame(RR_icar)) +
+  geom_histogram(bins = 20, color = "#000000", fill = "#0099F8") + theme_bw() +
+  scale_x_continuous(breaks = seq(0.4, 2, by = .1)) +
+  ggtitle("Posterior means RR for ICAR-MM") +
+  xlab("RR") + ylab("Frequency")
+ggsave(
+  plot = hist_icar, file = "DataAnalysis/DescriptivePosteriors/hist_icar.png"
+)
+#

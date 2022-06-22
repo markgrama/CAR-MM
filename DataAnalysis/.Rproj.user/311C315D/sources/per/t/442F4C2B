@@ -1,0 +1,26 @@
+{
+    "id": "442F4C2B",
+    "path": "C:/Users/mgram/Repos/MMCAR/DataAnalysis/Models/Review/GLMM_COV_NB.stan",
+    "project_path": "Models/Review/GLMM_COV_NB.stan",
+    "type": "stan",
+    "hash": "2386248595",
+    "contents": "",
+    "dirty": false,
+    "created": 1648495643822.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "38,0",
+        "scrollLine": "0"
+    },
+    "folds": "0|6|17|0|\n18|12|25|0|\n",
+    "lastKnownWriteTime": 1648509353,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1648509353400,
+    "read_only": false,
+    "read_only_alternatives": []
+}

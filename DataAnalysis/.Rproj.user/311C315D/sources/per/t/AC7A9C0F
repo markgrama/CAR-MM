@@ -1,0 +1,26 @@
+{
+    "id": "AC7A9C0F",
+    "path": "C:/Users/mgram/Repos/MMCAR/DataAnalysis/Models/Review/CARMM_COV_NB.stan",
+    "project_path": "Models/Review/CARMM_COV_NB.stan",
+    "type": "stan",
+    "hash": "912731487",
+    "contents": "",
+    "dirty": false,
+    "created": 1648495634650.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "139,6",
+        "scrollLine": "0"
+    },
+    "folds": "0|11|33|0|\n34|6|55|0|\n56|18|87|0|\n88|12|97|0|\n",
+    "lastKnownWriteTime": 1648509402,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1648509402628,
+    "read_only": false,
+    "read_only_alternatives": []
+}

@@ -1,0 +1,1152 @@
+#### GENERAL SETUP ####
+
+# Path
+path <- file.path("C:/Users/mgram/Repos/MMCAR")
+setwd(file.path(path))
+
+# Load saved results
+# load("./PreProcessing/ONELdata20201027.RData")
+# Load data
+# load("./PreProcessing/SEL_data_220128.RData")
+load("./PreProcessing/SEL_data_220203.RData")
+
+# Load package
+## Plot
+library(plot.matrix)
+library(viridis)
+## Data handling
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+library(forcats)
+## Sampling
+library(MASS)
+## Correlation
+library(corpcor)
+# library(correlation)
+library(MASS)
+## Spatial
+library(rgeos)
+library(rgdal)
+## Matrices
+library(Matrix)
+## Stan
+library(rstan)
+library(shinystan)
+library(loo)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+# Sys.setenv(LOCAL_CPPFLAGS = '-march=corei7 -mtune=corei7')
+## MCMC
+library(bayesplot)
+
+# MAP PLOT OPTIONS
+## Legend parameters
+pointSize <- 2
+textSize <- 27
+spaceLegend <- 5
+##
+plot_options <- list(
+  # General plot window options
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        plot.title = element_text(face = "bold", size = 40),
+        # Legend text
+        legend.title = element_text(face = "bold", size = textSize), 
+        legend.text  = element_text(face = "bold", size = textSize),
+        # Panel options
+        legend.key.size = unit(spaceLegend, "lines"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank()
+  ),
+  # General map plot options
+  geom_polygon(),
+  coord_equal(),
+  # Colour options
+  geom_path(color = "white"),
+  # Resize legend
+  guides(shape = guide_legend(override.aes = list(size = pointSize)),
+         color = guide_legend(override.aes = list(size = pointSize)))
+)
+
+# Load functions
+source("Scripts/CARMM_Functions.R")
+source("Scripts/Posterior_checks.R")
+source("Scripts/CARMM_Structure_Functions.R")
+
+# Data
+## Centre covariates
+X_cent <- apply(X_msoa[,-1], 2, function(x) (x - min(x))/diff(range(x)))
+## Bind
+d_sel <- list(
+  # Number of areas
+  n = nrow(W_sel),
+  # Covariates
+  k = ncol(X_cent),
+  X_cov = X_cent,
+  # Adjacecncy
+  W_n = sum(W_sel) / 2,
+  # number of neighbor pairs
+  W = W_sel,
+  # Multiple membership
+  m = nrow(H_sel),
+  M_W = H_sel,
+  # Outcome
+  y1 = outcomes$prev,
+  log_offset1 = log(outcomes$exp_prev)
+)
+#
+
+#### STAN - ICAR - NEGATIVE BINOMIAL ####
+
+# HMC PARAMETERS
+niter <- 1E4
+nchains <- 4
+
+# Models
+mod_COV_NB_ICAR_centred <- stan_model(
+  file = "DataAnalysis/Models/ICARMM_COV_nb_centred.stan")
+
+# ICAR
+time_icar_nb_rev <- Sys.time()
+fit_cov_nb_sel_icar_rev <- sampling(
+  mod_COV_NB_ICAR_centred, data = d_pol,
+  iter = niter, chains = nchains,
+  control = list(adapt_delta = .99, max_treedepth = 15)
+)
+time_icar_nb_rev <- Sys.time() - time_icar_nb_rev
+# Results
+pars_vec <- c('gamma', 'beta', 'tau' ,'v_sig1', 'ppp', 'lp__')
+print(fit_cov_nb_sel_icar_rev, pars = pars_vec,
+probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+
+# save(
+#   fit_cov_nb_sel_icar_rev, time_icar_nb_rev, mod_COV_NB_ICAR_centred,
+#   file = paste(
+#     "../DataStorage/MMCAR_Results/",
+#     "SEL_FIT_STAN_ICAR_NB_REV_",
+#     Sys.Date(),
+#     ".RData",
+#     sep = ""
+#   )
+# )
+#
+
+#### STAN - CAR - NEGATIVE BINOMIAL ####
+
+# HMC PARAMETERS
+niter <- 1E4
+nchains <- 4
+
+# Model
+mod_COV_NB_CAR_centred <- stan_model(
+  file = "DataAnalysis/Models/CARMM_COV_NB_SBC_centred.stan")
+
+# WIDE
+time_cent_nb <- Sys.time()
+fit_cov_nb_sel_rev <- sampling(
+  mod_COV_NB_CAR_centred, data = d_sel,
+  iter = niter, chains = nchains,
+  control = list(adapt_delta = .99, max_treedepth = 15)
+)
+time_cent_nb <- Sys.time() - time_cent_nb
+# Results
+# pars_vec <- c('gamma', 'beta','alpha', 'tau','v_sig1', 'ppp', 'lp__')
+# print(fit_cov_nb_sel_rev, pars = pars_vec,
+#       probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+
+save(
+  fit_cov_nb_sel_rev, time_cent_nb, mod_COV_NB_CAR_centred,
+  file = paste(
+    "../DataStorage/MMCAR_Results/",
+    "SEL_FIT_STAN_COV_nb_REV_",
+    Sys.Date(),
+    ".RData",
+    sep = ""
+  )
+)
+#
+
+#### STAN - CAR - NOINT - NEGATIVE BINOMIAL ####
+
+# HMC PARAMETERS
+niter <- 1E4
+nchains <- 4
+
+# Model
+mod_COV_NB_CAR_NOINT_centred <- stan_model(
+  file = "DataAnalysis/Models/CARMM_COV_NB_SBC_NOINT_centred.stan")
+
+time_cent_nb_noint <- Sys.time()
+fit_cov_nb_noint_sel_rev <- sampling(
+  mod_COV_NB_CAR_NOINT_centred, data = d_sel,
+  iter = niter, chains = nchains,
+  control = list(adapt_delta = .99, max_treedepth = 15)
+)
+time_cent_nb_noint <- Sys.time() - time_cent_nb_noint
+# Results
+# pars_vec <- c('beta','alpha', 'tau','v_sig1', 'ppp', 'lp__')
+# print(fit_cov_nb_noint_sel_rev, pars = pars_vec,
+#       probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+
+save(
+  fit_cov_nb_noint_sel_rev, time_cent_nb_noint, mod_COV_NB_CAR_NOINT_centred,
+  file = paste(
+    "../DataStorage/MMCAR_Results/",
+    "SEL_FIT_STAN_COV_nb_NOINT_REV_",
+    Sys.Date(),
+    ".RData",
+    sep = ""
+  )
+)
+#
+
+#### STAN - GLM - NEGATIVE BINOMIAL ####
+
+# HMC PARAMETERS
+niter <- 1E4
+nchains <- 4
+
+# Model
+mod_GLM_nb_centred <- stan_model(
+  file = "DataAnalysis/Models/GLM/GLM_MM_COV_nb_centred.stan")
+
+# WIDE
+time_glm_cent_nb <- Sys.time()
+fit_cov_nb_sel_glm_rev <- sampling(
+  mod_GLM_nb_centred, data = d_sel,
+  iter = niter, chains = nchains,
+  control = list(adapt_delta = .99, max_treedepth = 15)
+)
+time_glm_cent_nb <- Sys.time() - time_glm_cent_nb
+# # Results
+# pars_vec <- c('gamma', 'beta', 'v_sig1', 'ppp', 'lp__')
+# print(fit_cov_nb_sel_glm_rev, pars = pars_vec,
+#       probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+
+# save(
+#   fit_cov_nb_sel_glm_rev, time_glm_cent_nb, mod_GLM_nb_centred, 
+#   file = paste(
+#     "../DataStorage/MMCAR_Results/",
+#     "SEL_FIT_STAN_GLM_nb_REV_",
+#     Sys.Date(),
+#     ".RData",
+#     sep = ""
+#   )
+# )
+#
+
+#### STAN - ICAR - UNNORMALISED ####
+
+# HMC PARAMETERS
+niter <- 1E4
+nchains <- 4
+
+# Models
+mod_COV_NB_ICAR_uncentred <- stan_model(
+  file = "DataAnalysis/Models/ICARMM_COV_NB_uncentered.stan")
+
+# Remove centering
+d_sel_uncent <- d_sel
+d_sel_uncent$X_cov <- X_msoa[,-1]
+
+# ICAR
+time_icar_uncent_nb_rev <- Sys.time()
+fit_cov_nb_sel_icar_uncent_rev <- sampling(
+  mod_COV_NB_ICAR_uncentred, data = d_sel_uncent,
+  iter = niter, chains = nchains,
+  control = list(adapt_delta = .99, max_treedepth = 15)
+)
+time_icar_uncent_nb_rev <- Sys.time() - time_icar_uncent_nb_rev
+# Results
+pars_vec <- c('gamma', 'beta', 'tau' ,'v_sig1', 'ppp', 'lp__')
+print(fit_cov_nb_sel_icar_uncent_rev, pars = pars_vec,
+      probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+
+# save(
+#   fit_cov_nb_sel_icar_rev, time_icar_nb_rev, mod_COV_NB_ICAR_centred,
+#   file = paste(
+#     "../DataStorage/MMCAR_Results/",
+#     "SEL_FIT_STAN_ICAR_NB_REV_",
+#     Sys.Date(),
+#     ".RData",
+#     sep = ""
+#   )
+# )
+#
+
+
+#### MM TRANSFORM GLM ####
+
+# Transform data
+X_mm <- apply(X_msoa[,-1], 2, function(x) H_sel %*% x)
+X_mm <- X_msoa[,-1]
+y_mm <- d_sel$y1
+d_mm <- data.frame(X_mm)
+
+# GLM
+glm(y ~ ., family = "poisson", data = d_mm, offset = d_sel$log_offset1)
+glm(y ~ ., family = "poisson", data = d_mm[,c("imd", "perc_sa", "y")], offset = d_sel$log_offset1)
+glm(y ~ ., family = "poisson", data = d_mm[,c("pollution", "perc_sa", "y")], offset = d_sel$log_offset1)
+
+# Correlations
+cor(as.matrix(d_mm))
+ggplot(data = d_mm, aes(x = imd, y = y)) + geom_point() + geom_smooth()
+ggplot(data = d_mm, aes(x = pollution, y = y)) + geom_point() + geom_smooth()
+ggplot(data = d_mm, aes(x = perc_sa, y = y)) + geom_point() + geom_smooth()
+ggplot(data = d_mm, aes(x = imd, y = pollution)) + geom_point() + geom_smooth()
+cor(d_mm)
+#
+
+#### RESULTS ####
+
+# ICAR
+pars_vec <- c('gamma', 'beta', 'tau' ,'v_sig1', 'ppp', 'lp__')
+print(fit_cov_nb_sel_icar_rev, pars = pars_vec,
+probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+# CAR
+pars_vec <- c('gamma', 'beta','alpha', 'tau','v_sig1', 'ppp', 'lp__')
+print(fit_cov_nb_sel_rev, pars = pars_vec,
+      probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+# CAR NOINT
+pars_vec <- c('beta','alpha', 'tau','v_sig1', 'ppp', 'lp__')
+print(fit_cov_nb_noint_sel_rev, pars = pars_vec,
+      probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+# GLM
+pars_vec <- c('gamma', 'beta', 'v_sig1', 'ppp', 'lp__')
+print(fit_cov_nb_sel_glm_rev, pars = pars_vec,
+      probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+# ICAR MOR
+pars_vec <- c('gamma', 'beta', 'tau' ,'v_sig1', 'ppp', 'lp__')
+print(fit_mor_sel_icar, pars = pars_vec,
+      probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+
+# GLM POISSON
+# pars_vec <- c('gamma', 'beta', 'ppp', 'lp__')
+# print(fit_glm_p_rev, pars = pars_vec, 
+#       probs = c(0.025, 0.05, 0.5, 0.95, 0.975))
+#
+
+#### CONFOUNDING BIAS ####
+
+# MM data
+# X_exp <- cbind(rep(1, 153), apply(H_sel%*%as.matrix(X_msoa[,-1]), 2, log))
+X_exp <- cbind(apply(H_sel%*%as.matrix(X_msoa[,-1]), 2, log))
+d_mm <- data.frame(y = log(outcomes$prev) - log(outcomes$exp_prev), X_exp[,-1])
+m <- nrow(H_sel) ; n <- ncol(H_sel)
+
+# Linear model
+lm_sel <- lm(y ~ -1 + ., data = d_mm)
+summary(lm_sel)
+
+# Adjacency
+## SEL
+Z <- eigen(diag(rowSums(W_sel)) - W_sel)$vectors
+Z_1 <- Z[,151]
+## MM
+eigen_mm <- eigen(H_sel %*% (diag(rowSums(W_sel)) - W_sel) %*% t(H_sel))
+Z_mm <- eigen_mm$vectors
+D_mm <- diag(eigen_mm$values)
+
+# Other matrices
+P_c <- diag(rep(1, m)) - X_exp%*%solve(t(X_exp)%*%X_exp)%*%t(X_exp)
+b_hat <- solve(t(Z_mm)%*%P_c%*%Z_mm + D_mm)%*%t(Z_mm)%*%P_c%*%d_mm$y
+
+# Biased coefficients
+lm_sel$coefficients - solve(t(X_exp)%*%X_exp)%*%t(X_exp)%*%Z_mm%*%b_hat
+#
+
+#### LOAD RESULTS ####
+
+# Previous
+# load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_FIT_STAN_COV_nb_rev_2021-07-16.RData")
+# load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_FIT_STAN_GLM_nb_rev_2021-07-16.RData")
+# load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_FIT_STAN_ICAR_nb_rev_2021-07-16.RData")
+
+# REV
+load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_FIT_STAN_COV_nb_REV_2022-01-28.RData")
+load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_FIT_STAN_COV_nb_NOINT_REV_2022-01-30.RData")
+load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_FIT_STAN_GLM_nb_REV_2022-01-28.RData")
+load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_FIT_STAN_ICAR_nb_REV_2022-01-28.RData")
+
+# MOR
+load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_FIT_STAN_ICAR_nb_MOR_2022-02-04.RData")
+
+# Mixed replicates
+load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_MIXED_REP_REV.RData")
+
+# save(rep_sel_nb_glm_rev, rep_sel_nb_icar_rev, rep_sel_nb_carmm_rev, rep_sel_nb_carmm_noint_rev,
+#      rep_sel_nb_mor_icar,
+#      file = "C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_MIXED_REP_REV.RData")
+# 
+# POISSON
+# load("C:/Users/mgram/Repos/DataStorage/MMCAR_Results/SEL_FIT_STAN_GLM_P_REV_2022-01-30.RData")
+#
+
+#### MIXED REPLICATES ####
+
+# GLM
+rep_sel_nb_glm_rev <- f_mix_carmm(
+  glm = T, nb = T,
+  beta = as.matrix(fit_cov_nb_sel_glm_rev)[,c("beta[1]", "beta[2]", "beta[3]")], 
+  gamma = as.matrix(fit_cov_nb_sel_glm_rev)[, "gamma"],
+  covars = d_sel$X_cov, W = d_sel$W, H = d_sel$M_W,
+  psi = as.matrix(fit_cov_nb_sel_glm_rev)[, "v_sig1"],
+  off = exp(d_sel$log_offset1))
+
+# ICAR
+rep_sel_nb_icar_rev <- f_mix_carmm(
+  icar = T,
+  tau = as.matrix(fit_cov_nb_sel_icar_rev)[, "tau"], 
+  beta = as.matrix(fit_cov_nb_sel_icar_rev)[,c("beta[1]", "beta[2]", "beta[3]")], 
+  gamma = as.matrix(fit_cov_nb_sel_icar_rev)[, "gamma"],
+  psi = as.matrix(fit_cov_nb_sel_icar_rev)[, "v_sig1"],
+  covars = d_sel$X_cov, W = d_sel$W, H = d_sel$M_W, 
+  off = exp(d_sel$log_offset1))
+
+# CAR-MM
+rep_sel_nb_carmm_rev <- f_mix_carmm(
+  alpha = as.matrix(fit_cov_nb_sel_rev)[,"alpha"],
+  tau = as.matrix(fit_cov_nb_sel_rev)[, "tau"], 
+  beta = as.matrix(fit_cov_nb_sel_rev)[,c("beta[1]", "beta[2]", "beta[3]")],
+  gamma = as.matrix(fit_cov_nb_sel_rev)[, "gamma"],
+  psi = as.matrix(fit_cov_nb_sel_rev)[, "v_sig1"],
+  covars = d_sel$X_cov, W = d_sel$W, H = d_sel$M_W, 
+  off = exp(d_sel$log_offset1))
+
+# CAR-MM NOINT
+rep_sel_nb_carmm_noint_rev <- f_mix_carmm(
+  alpha = as.matrix(fit_cov_nb_noint_sel_rev)[,"alpha"],
+  tau = as.matrix(fit_cov_nb_noint_sel_rev)[, "tau"], 
+  beta = as.matrix(fit_cov_nb_noint_sel_rev)[,c("beta[1]", "beta[2]", "beta[3]")],
+  gamma = rep(0, length(as.matrix(fit_cov_nb_sel_rev)[, "gamma"])),
+  psi = as.matrix(fit_cov_nb_sel_rev)[, "v_sig1"],
+  covars = d_sel$X_cov, W = d_sel$W, H = d_sel$M_W, 
+  off = exp(d_sel$log_offset1))
+
+# ICAR MOR
+rep_sel_nb_mor_icar <- f_mix_carmm(
+  icar = T,
+  tau = as.matrix(fit_mor_sel_icar)[, "tau"], 
+  beta = as.matrix(fit_mor_sel_icar)[,c("beta[1]", "beta[2]", "beta[3]")],
+  gamma = rep(0, length(as.matrix(fit_mor_sel_icar)[, "gamma"])),
+  psi = as.matrix(fit_mor_sel_icar)[, "v_sig1"],
+  covars = d_sel$X_cov, W = d_sel$W, H = d_sel$M_W, 
+  off = exp(d_sel$log_offset1))
+
+# ICAR MOR DIFFERENT METHOD
+rep_sel_nb_mor_icar <- f_mix_carmm(
+  icar = T,
+  tau = as.matrix(fit_mor_sel_icar)[, "tau"], 
+  beta = as.matrix(fit_mor_sel_icar)[,c("beta[1]", "beta[2]", "beta[3]")],
+  gamma = rep(0, length(as.matrix(fit_mor_sel_icar)[, "gamma"])),
+  psi = as.matrix(fit_mor_sel_icar)[, "v_sig1"],
+  covars = d_sel$X_cov, W = d_sel$W, H = d_sel$M_W, 
+  off = exp(d_sel$log_offset1))
+#
+
+#### LOO ####
+
+# GLM
+## Likelihood
+lik_cov_nb_sel_glm_rev <- extract_log_lik(
+  fit_cov_nb_sel_glm_rev, parameter_name = "log_lik1", merge_chains = FALSE)
+## Reff
+r_eff_cov_nb_sel_glm_rev <- relative_eff(
+  exp(lik_cov_nb_sel_glm_rev), cores = 2)
+## LOO
+loo_cov_nb_sel_glm_rev <- loo(
+  lik_cov_nb_sel_glm_rev, r_eff = r_eff_cov_nb_sel_glm_rev, cores = 2)
+
+# ICAR
+## Likelihood
+lik_cov_nb_sel_icar_rev <- extract_log_lik(
+  fit_cov_nb_sel_icar_rev, parameter_name = "log_lik1", merge_chains = FALSE)
+## Reff
+r_eff_cov_nb_sel_icar_rev <- relative_eff(
+  exp(lik_cov_nb_sel_icar_rev), cores = 2)
+## LOO
+loo_cov_nb_sel_icar_rev <- loo(
+  lik_cov_nb_sel_icar_rev, r_eff = r_eff_cov_nb_sel_icar_rev, cores = 2)
+
+# CAR-MM
+## Likelihood
+lik_cov_nb_sel_carmm_rev <- extract_log_lik(
+  fit_cov_nb_sel_rev, parameter_name = "log_lik1", merge_chains = FALSE)
+## Reff
+r_eff_cov_nb_sel_carmm_rev <- relative_eff(
+  exp(lik_cov_nb_sel_carmm_rev), cores = 2)
+## LOO
+loo_cov_nb_sel_carmm_rev <- loo(
+  lik_cov_nb_sel_carmm_rev, r_eff = r_eff_cov_nb_sel_carmm_rev, cores = 2)
+
+# CAR-MM NOINT
+## Likelihood
+lik_nb_carmm_noint_rev <- extract_log_lik(
+  fit_cov_nb_noint_sel_rev, parameter_name = "log_lik1", merge_chains = FALSE)
+## Reff
+r_eff_nb_carmm_noint_rev <- relative_eff(exp(lik_nb_carmm_noint_rev), cores = 2)
+## LOO
+loo_nb_carmm_noint_rev <- loo(
+  lik_nb_carmm_noint_rev, r_eff = r_eff_nb_carmm_noint_rev, cores = 2)
+
+# ICAR - MOR
+### Likelihood
+lik_mor_sel_icar <- extract_log_lik(
+  fit_mor_sel_icar, parameter_name = "log_lik1", merge_chains = FALSE)
+### Reff
+r_eff_mor_sel_icar <- relative_eff(exp(lik_mor_sel_icar), cores = 2)
+### LOO
+loo_mor_sel_icar <- loo(lik_mor_sel_icar, r_eff = r_eff_mor_sel_icar, cores = 2)
+
+# Compare
+loo_compare(
+  list(
+    icar = loo_cov_nb_sel_icar_rev, 
+    car = loo_cov_nb_sel_carmm_rev,
+    glm = loo_cov_nb_sel_glm_rev,
+    icar_mor = loo_mor_sel_icar,
+    car_noint = loo_nb_carmm_noint_rev
+  )
+)
+#
+
+#### SCORING RULES ####
+
+# NEGATIVE BINOMIAL
+## GLM
+rps(y_rep = rep_sel_nb_glm_rev$y_rep, y_obs = d_sel$y1)
+dss(y_rep = rep_sel_nb_glm_rev$y_rep, y_obs = d_sel$y1)
+## ICAR
+rps(y_rep = rep_sel_nb_icar_rev$y_rep, y_obs = d_sel$y1)
+dss(y_rep = rep_sel_nb_icar_rev$y_rep, y_obs = d_sel$y1)
+## CAR-MM
+rps(y_rep = rep_sel_nb_carmm_rev$y_rep, y_obs = d_sel$y1)
+dss(y_rep = rep_sel_nb_carmm_rev$y_rep, y_obs = d_sel$y1)
+## NOINT CAR
+rps(y_rep = rep_sel_nb_carmm_noint_rev$y_rep, y_obs = d_sel$y1)
+dss(y_rep = rep_sel_nb_carmm_noint_rev$y_rep, y_obs = d_sel$y1)
+## ICAR MOR
+rps(y_rep = rep_sel_nb_mor_icar$y_rep, y_obs = d_sel$y1)
+dss(y_rep = rep_sel_nb_mor_icar$y_rep, y_obs = d_sel$y1)
+#
+
+#### RESULTS TABLE ####
+
+# Function for results
+## Width of c
+ci_width <- function(fit_par, q){
+  low <- quantile(fit_par, prob = q[1])
+  high <- quantile(fit_par, prob = q[2])
+  as.numeric(high - low)
+}
+## Wrapper
+f_fitstan_q <- function(fit, pars){
+  a_fit <- as.array(fit)
+  res <- sapply(pars, function(x) c(
+    mean(a_fit[,,x]), sd(a_fit[,,x]), 
+    # quantile(a_fit[,,x], prob = c(.025, .05,.5,.95,.975)),
+    quantile(a_fit[,,x], prob = c(.025,.5,.975)),
+    ci_width(a_fit[,,x], q = c(.025, .975)),
+    rstan::Rhat(a_fit[,,x]),
+    summary(fit)$summary[x, "n_eff"]
+  )) %>% t()
+}
+
+# Create results
+pars_res <- c('alpha', 'tau', 'gamma', 'beta[1]', 'beta[2]', 'v_sig1')
+pars_res_icar <- c('tau', 'gamma','beta[1]', 'beta[2]', 'v_sig1')
+pars_res_glm <- c('gamma', 'beta[1]', 'beta[2]', 'v_sig1')
+## CARMM
+res_carmm_nb <- f_fitstan_q(fit_cov_nb_sel_cent, pars = pars_res)
+## ICARMM
+res_icarmm_nb <- f_fitstan_q(fit_cov_nb_sel_icar_cent, pars = pars_res_icar)
+res_icarmm_nb <- rbind(
+  c(1, 0, rep(1, 5), 0), res_icarmm_nb
+)
+rownames(res_icarmm_nb) <- pars_res
+## GLM
+res_glm_nb <- f_fitstan_q(fit_cov_nb_sel_glm_cent, pars = pars_res_glm)
+res_glm_nb <- rbind(
+  c(1, 0, rep(1, 5), 0), c(1, 0, rep(1, 5), 0), res_glm_nb
+)
+rownames(res_glm_nb) <- pars_res
+
+# Final table
+## true parameters
+res_tab <- matrix(NA, ncol = ncol(res_carmm_nb), nrow = 3*length(pars_res))
+k <- 1
+for(i in pars_res){
+  res_tab[k:(k+2),] <- rbind(
+    res_icarmm_nb[i,], res_carmm_nb[i,], res_glm_nb[i,]
+  )
+  k <- k + 3
+}
+res_tab <- as.data.frame(res_tab)
+
+## Colnames
+colnames(res_tab) <- c("mean", "sd", "2.5\\%", "50\\%", "97.5\\%", "width CI",
+                       "$\\hat{R}$", "ESS")
+r_names <- c(
+  "\\multirow{3}{*}{$\\alpha$}", "", "",
+  "\\multirow{3}{*}{$\\tau$}", "", "",
+  "\\multirow{3}{*}{$\\gamma$}", "", "",
+  "\\multirow{3}{*}{$\\beta_{1}$}", "", "",
+  "\\multirow{3}{*}{$\\beta_{2}$}", "", "",
+  "\\multirow{3}{*}{$\\psi$}", "", ""
+)
+res_tab <- res_tab %>% mutate(ESS = round(ESS, 0))
+## Xtable
+library(xtable)
+print(xtable(res_tab), booktabs = T,
+      # sanitize.rownames.function = function(x) paste(r_names),
+      include.rownames=FALSE,
+      sanitize.colnames.function = function(x) paste(colnames(res_tab)),
+      sanitize.text.function=identity
+)
+#
+
+#### RESULTS TABLE - HORIZ ####
+
+# Function for results
+## Width of c
+ci_width <- function(fit_par, q){
+  low <- quantile(fit_par, prob = q[1])
+  high <- quantile(fit_par, prob = q[2])
+  as.numeric(high - low)
+}
+## Wrapper
+f_fitstan_q <- function(fit, pars){
+  a_fit <- as.array(fit)
+  res <- sapply(pars, function(x) c(
+    mean(a_fit[,,x]), sd(a_fit[,,x]), 
+    # quantile(a_fit[,,x], prob = c(.025, .05,.5,.95,.975)),
+    quantile(a_fit[,,x], prob = c(.025,.5,.975)),
+    ci_width(a_fit[,,x], q = c(.025, .975)),
+    rstan::Rhat(a_fit[,,x]),
+    summary(fit)$summary[x, "n_eff"]
+  )) %>% t()
+}
+
+# Create results
+pars_res <- c('alpha', 'tau', 'gamma', 'beta[1]', 'beta[2]', 'v_sig1')
+pars_res_icar <- c('tau', 'gamma','beta[1]', 'beta[2]', 'v_sig1')
+pars_res_glm <- c('gamma', 'beta[1]', 'beta[2]', 'v_sig1')
+## CARMM
+res_carmm_nb <- f_fitstan_q(fit_cov_nb_sel_cent, pars = pars_res)
+## ICARMM
+res_icarmm_nb <- f_fitstan_q(fit_cov_nb_sel_icar_cent, pars = pars_res_icar)
+res_icarmm_nb <- rbind(
+  c(1, 0, rep(1, 5), 0), res_icarmm_nb
+)
+rownames(res_icarmm_nb) <- pars_res
+## GLM
+res_glm_nb <- f_fitstan_q(fit_cov_nb_sel_glm_cent, pars = pars_res_glm)
+res_glm_nb <- rbind(
+  c(1, 0, rep(1, 5), 0), c(1, 0, rep(1, 5), 0), res_glm_nb
+)
+rownames(res_glm_nb) <- pars_res
+
+# Final table
+## true parameters
+res_tab <- matrix(NA, ncol = ncol(res_carmm_nb), nrow = 3*length(pars_res))
+k <- 1
+for(i in pars_res){
+  res_tab[k:(k+2),] <- rbind(
+    res_icarmm_nb[i,], res_carmm_nb[i,], res_glm_nb[i,]
+  )
+  k <- k + 3
+}
+res_tab <- as.data.frame(res_tab)
+# res_tab <- res_tab %>% mutate(ESS = round(ESS, 0))
+
+## Colnames
+colnames(res_tab) <- c(
+  "\\multicolumn{3}{c}{$\\alpha$}", 
+  "\\multicolumn{3}{c}{$\\tau$}", 
+  "\\multicolumn{3}{c}{$\\gamma$}",
+  "\\multicolumn{3}{c}{$\\beta_{1}$}", 
+  "\\multicolumn{3}{c}{$\\beta_{2}$}", 
+  "\\multicolumn{3}{c}{$\\beta_{2}$}", 
+  "\\multicolumn{3}{c}{$\\psi$}")
+r_names <- c(
+  "\\multirow{3}{*}{mean}", "", "",
+  "\\multirow{3}{*}{sd}", "", "",
+  "\\multirow{3}{*}{2.5\\%}", "", "",
+  "\\multirow{3}{*}{50\\%}", "", "",
+  "\\multirow{3}{*}{97.5\\%}", "", "",
+  "\\multirow{3}{*}{width CI}", "", "",
+  "\\multirow{3}{*}{$\\hat{R}$}", "", "",
+  "\\multirow{3}{*}{ESS}", "", ""
+)
+
+## Xtable
+library(xtable)
+print(xtable(t(res_tab)), booktabs = T,
+      sanitize.rownames.function = function(x) paste(r_names),
+      include.rownames=FALSE,
+      sanitize.colnames.function = function(x) paste(colnames(res_tab)),
+      sanitize.text.function=identity
+)
+#
+
+#### CALIBRATION - RR ####
+
+H <- d_sel$M_W
+y_obs <- outcomes$prev
+m <- nrow(d_sel$M_W)
+
+order_mm_stat <- 1:m/(m + 1)
+ppp_carmm_nb <- f_ppp_cont(y = y_obs, yrep = t(rep_sel_nb_carmm_rev$y_rep))
+ppp_carmm_noint_nb <- f_ppp_cont(
+  y = y_obs, yrep = t(rep_sel_nb_carmm_rev$y_rep)
+)
+ppp_icar_nb <- f_ppp_cont(y = y_obs, yrep = t(rep_sel_nb_icar_rev$y_rep))
+ppp_glm_nb <- f_ppp_cont(y = y_obs, yrep = t(rep_sel_nb_glm_rev$y_rep))
+ppp_icar_mor <- f_ppp_cont(y = y_obs, yrep = t(rep_sel_nb_mor_icar$y_rep))
+# ppp_icar_diff <- f_ppp_cont(y = y_obs, yrep = t(rep_sel_nb_mor_icar_diff$y_rep))
+
+# Extract colour
+p_colours <- data.frame(x = 1:100, y = 0, col = 1:100) %>% 
+  ggplot(aes(x = x, y = y, colour = as.character(col))) + geom_point(size = 2) + 
+  # scale_colour_viridis(discrete = TRUE)
+  scale_colour_viridis(discrete = TRUE, option="magma") 
+v_colours <- ggplot_build(p_colours)$data[[1]]$colour
+
+# Plot
+cal_nb_plot <- data.frame(
+  ord = order_mm_stat, 
+  carmm_nb = sort(ppp_carmm_nb),
+  icar_nb = sort(ppp_icar_nb),
+  glm_nb = sort(ppp_glm_nb),
+  carmm_noint = sort(ppp_carmm_noint_nb),
+  mor_icar = sort(ppp_icar_mor)
+  # diff = sort(ppp_icar_diff)
+  ) %>% 
+  pivot_longer(!ord, names_to = "names", values_to = "values") %>% 
+  ggplot(aes(x = ord, y = values, colour = names)) + geom_point() +
+  scale_colour_viridis(discrete = TRUE, name = "Model", option = "magma",
+                       labels = c("CAR-MM", "GLM-MM", "ICAR-MM","CARNOINT",
+                                  "MOR ICAR"#,
+                                  # "DIFF"
+                                  )) + 
+  geom_abline(slope = 1, intercept = 0) + theme_bw() +
+  theme(plot.title = element_text(size = 20, face = "bold"),
+        legend.title = element_text(size = 15, face = "bold"),
+        legend.text = element_text(size = 12)) +
+  xlab("Ordered Mixed predictive p-values") +
+  ylab("Ordinates of Uniform distribution")
+
+
+plot(order_mm_stat, sort(ppp_icar_diff))
+points(order_mm_stat, sort(ppp_glm_nb), col = "red")
+points(order_mm_stat, sort(ppp_icar_mor), col = "blue")
+abline(a = 0, b = 1)
+
+# Save
+# path_save_img <- file.path(
+#   "C:/Users/mgram/OneDrive - Queen Mary, University of London", 
+#   "Project-CLN-MS-5MVD0Z2/MMCARcloud/fig"
+# )
+# ggsave(file = file.path(path_save_img, "cal_nb_plot_new.png"),
+#        plot = cal_nb_plot, width = 8.64, height = 4,
+#        device = "png", dpi = "retina")
+
+# Base plot
+## Functions for quantiles
+f_q_beta_low <- function(n, j) qbeta(.025, shape1 = j*n, shape2 = n - j*n + 1)
+f_q_beta_low <- Vectorize(f_q_beta_low, vectorize.args = "j")
+f_q_beta_high <- function(n, j) qbeta(1-.025, shape1 = j*n,
+                                      shape2 = n - j*n + 1)
+f_q_beta_high <- Vectorize(f_q_beta_high, vectorize.args = "j")
+
+conf_bands_plot <- list(
+  geom_function(fun = f_q_beta_low, args = list(n = 153), col = "red", size = 2),
+  geom_function(fun = f_q_beta_high, args = list(n = 153), col = "red", size = 2)
+)
+
+cal_nb_plot + conf_bands_plot
+#
+
+#### MAP RR ####
+# # Import shapefile of area around LDN
+# out_ldn_shp <- readOGR("PreProcessing/Shapefile/Outer_London", "Outer_London")
+# ## Convert to a dataframe for use in ggplot2
+# out_ldn_df <- fortify(out_ldn_shp, region = "msoa11cd")
+
+# Names vectors
+l_RR_names <- sapply(1:d_sel$n, function(x) paste(
+  "l_RR[", x, "]", sep = ""
+))
+
+# Posterior Means RR for models
+## ICAR
+rr_sel_icar <- apply(
+  as.matrix(fit_cov_nb_sel_icar_rev)[, l_RR_names], 2, 
+  function(x) mean(exp(x))
+)
+## CARMM
+rr_sel_carmm <- apply(
+  as.matrix(fit_cov_nb_sel_rev)[, l_RR_names], 2, 
+  function(x) mean(exp(x))
+)
+## CARMM
+rr_sel_carmm_noint <- apply(
+  as.matrix(fit_cov_nb_noint_sel_rev)[, l_RR_names], 2, 
+  function(x) mean(exp(x))
+)
+## GLM
+rr_sel_glm <- apply(
+  as.matrix(fit_cov_nb_sel_glm_rev)[, l_RR_names], 2, 
+  function(x) mean(exp(x))
+)
+## MOR
+rr_sel_icar_mor <- apply(
+  as.matrix(fit_mor_sel_icar)[, l_RR_names], 2, 
+  function(x) mean(exp(x))
+)
+
+# Merge
+rr_merge <- data.frame(
+  id = rownames(d_sel$W),
+  icar = rr_sel_icar, carmm = rr_sel_carmm, glm = rr_sel_glm,
+  carmm_noint = rr_sel_carmm_noint, mor_icar = rr_sel_icar_mor
+)
+# ## Complete data merge
+# sel_df <- merge(out_ldn_df %>% filter(id %in% rownames(d_sel$W)),
+#                 rr_merge, by = "id")
+
+# # Map - BASE
+# map_base <- ggplot() + 
+#   theme(axis.ticks = element_blank(), axis.text = element_blank(),
+#         axis.title = element_blank(), aspect.ratio = 9/16,
+#         panel.background = element_blank())
+# ## ICAR
+# map_icar <- map_base +
+#   geom_polygon(data = sel_df, aes(x = long, y = lat, group = id, fill = icar),
+#                color = 'black', size = .2) + 
+#   scale_fill_viridis(name = bquote("Relative risk" ~ rho)) +
+#   ggtitle("ICAR-MM")
+# ## CARMM
+# map_carmm <- map_base +
+#   geom_polygon(data = sel_df, aes(x = long, y = lat, group = id, fill = carmm),
+#                color = 'black', size = .2) +
+#   scale_fill_viridis(name = bquote("Relative risk" ~ rho)) +
+#   ggtitle("CAR-MM")
+# # ## GLM
+# map_glm <- map_base +
+#   geom_polygon(data = sel_df, aes(x = long, y = lat, group = id, fill = glm),
+#                color = 'black', size = .2) +
+#   scale_fill_viridis(name = bquote("Relative risk" ~ rho)) +
+#   ggtitle("GLM-MM")
+
+# Save
+# path_save_img <- file.path(
+#   "C:/Users/mgram/OneDrive - Queen Mary, University of London", 
+#   "Project-CLN-MS-5MVD0Z2/MMCARcloud/fig"
+# )
+# ggsave(file = file.path(path_save_img, "rr_map_sel_icar.png"),
+#        plot = map_icar, width = 8.64, height = 6,
+#        device = "png", dpi = "retina")
+# ggsave(file = file.path(path_save_img, "rr_map_sel_carmm.png"),
+#        plot = map_carmm, width = 8.64, height = 6,
+#        device = "png", dpi = "retina")
+# ggsave(file = file.path(path_save_img, "rr_map_sel_glm.png"),
+#        plot = map_glm, width = 8.64, height = 6,
+#        device = "png", dpi = "retina")
+
+
+#### CORRELATION POSTERIOR SAMPLES ####
+
+# Phi names
+phi_names <- sapply(1:d_sel$n, function(x) paste(
+  "phi1[", x, "]", sep = ""
+))
+
+Z <- eigen(diag(rowSums(W_sel)) - W_sel)$vectors
+## Merge with data map
+sel_df_eigen <- merge(sel_df, data.frame(id = rownames(W_sel), Z), by = "id")
+
+# Smallest frequency eigenvector
+map_base +
+  geom_polygon(data = sel_df_eigen,
+               aes(x = long, y = lat, group = id, fill = X151),
+               color = 'black', size = .2) +
+  scale_fill_viridis(name = bquote("Relative risk" ~ rho))
+
+# Correlation
+post_icar <- as.matrix(fit_cov_nb_sel_icar_rev)
+cor(X_cent[,3], Z[, 151])
+#
+
+#### COMPARE POSTERIOR MEANS BETWEEN MODELS ####
+
+# Merge useful results
+## Adjacency
+Z_1 <- eigen(diag(rowSums(W_sel)) - W_sel)$vectors[,151]
+## Final merge
+post_res <- data.frame(X_msoa[, -1], rr_merge, Z_1 = Z_1)
+
+# Between RR
+ggplot(post_res, aes(icar, carmm)) + geom_point() + geom_smooth() +
+  ggtitle("CAR ~ ICAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$icar, post_res$carmm), 3))
+  )
+ggplot(post_res, aes(glm, carmm)) + geom_point() + geom_smooth() +
+  ggtitle("CAR ~ GLM") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$glm, post_res$carmm), 3))
+  )
+ggplot(post_res, aes(icar, glm)) + geom_point() + geom_smooth() +
+  ggtitle("GLM ~ ICAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$icar, post_res$glm), 3))
+  )
+ggplot(post_res, aes(icar, carmm_noint)) + geom_point() + geom_smooth() +
+  ggtitle("CAR NOINT ~ ICAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$icar, post_res$carmm_noint), 3))
+  )
+ggplot(post_res, aes(glm, carmm_noint)) + geom_point() + geom_smooth() +
+  ggtitle("CAR NOINT ~ GLM") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$glm, post_res$carmm_noint), 3))
+  )
+ggplot(post_res, aes(glm, mor_icar)) + geom_point() + geom_smooth() +
+  ggtitle("GLM ~ ICAR MOR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$glm, post_res$mor_icar), 3))
+  )
+
+# With covariates
+## ICAR
+### SA_POP
+ggpubr::ggarrange(
+ggplot(post_res, aes(icar, perc_sa)) + geom_point() + geom_smooth() +
+  ggtitle("SA POP ~ ICAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$icar, post_res$perc_sa), 3))
+  ),
+### IMD
+ggplot(post_res, aes(icar, imd)) + geom_point() + geom_smooth() +
+  ggtitle("IMD ~ ICAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$icar, post_res$imd), 3))
+  ),
+### POLLUTION
+ggplot(post_res, aes(icar, pollution)) + geom_point() + geom_smooth() +
+  ggtitle("POLLUTION ~ ICAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$icar, post_res$pollution), 3))
+  ),
+## CAR
+### SA_POP
+ggplot(post_res, aes(carmm, perc_sa)) + geom_point() + geom_smooth() +
+  ggtitle("SA POP ~ CAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$carmm, post_res$perc_sa), 3))
+  ),
+### IMD
+ggplot(post_res, aes(carmm, imd)) + geom_point() + geom_smooth() +
+  ggtitle("IMD ~ CAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$carmm, post_res$imd), 3))
+  ),
+### POLLUTION
+ggplot(post_res, aes(carmm, pollution)) + geom_point() + geom_smooth() +
+  ggtitle("POLLUTION ~ CAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$carmm, post_res$pollution), 3))
+  ),
+## GLM
+### SA_POP
+ggplot(post_res, aes(glm, perc_sa)) + geom_point() + geom_smooth() +
+  ggtitle("SA POP ~ CAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$glm, post_res$perc_sa), 3))
+  ),
+### IMD
+ggplot(post_res, aes(glm, imd)) + geom_point() + geom_smooth() +
+  ggtitle("IMD ~ CAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$glm, post_res$imd), 3))
+  ),
+### POLLUTION
+ggplot(post_res, aes(glm, pollution)) + geom_point() + geom_smooth() +
+  ggtitle("POLLUTION ~ CAR") +
+  annotate(
+    "text", x = .7, y = 1.15, size = 6, 
+    label = paste("Correlation: ",
+                  round(cor(post_res$glm, post_res$pollution), 3))
+  ),
+nrow = 3, ncol = 3)
+
+# Correlation with eigenvectors
+ggpubr::ggarrange(
+  ### SA_POP
+  ggplot(post_res, aes(Z_1, perc_sa)) + geom_point() + #geom_smooth() +
+    ggtitle("SA POP ~ CAR") +
+    annotate(
+      "text",# x = .7, y = 1.15, size = 6, 
+      label = paste("Correlation: ",
+                    round(cor(post_res$Z_1, post_res$perc_sa), 3))
+    ),
+  ### IMD
+  ggplot(post_res, aes(Z_1, imd)) + geom_point() + #geom_smooth() +
+    ggtitle("IMD ~ CAR") +
+    annotate(
+      "text",# x = .7, y = 1.15, size = 6, 
+      label = paste("Correlation: ",
+                    round(cor(post_res$Z_1, post_res$imd), 3))
+    ),
+  ### POLLUTION
+  ggplot(post_res, aes(Z_1, pollution)) + geom_point() + #geom_smooth() +
+    ggtitle("POLLUTION ~ CAR") +
+    annotate(
+      "text",# x = .7, y = 1.15, size = 6, 
+      label = paste("Correlation: ",
+                    round(cor(post_res$Z_1, post_res$pollution), 3))
+    ),
+  ncol = 3
+)
+#
+
+#### CORRELATION COVARIATES AND RANDOM EFFECTS ####
+
+# Phi names
+phi_names <- sapply(1:d_sel$n, function(x) paste(
+  "phi[", x, "]", sep = ""
+))
+
+# Function for  computing correlations between covariates and random effects
+f_cov_ran <- function(fit, X, phi_names, noint = F, glm = F){
+  # browser()
+  # Covariates coefficients
+  beta <- as.matrix(fit)[,c("beta[1]", "beta[2]", "beta[3]")] 
+  
+  # Intercept
+  if(noint == T){
+    gamma <- rep(0, nrow(beta))
+  } else{
+    gamma <- as.matrix(fit)[, "gamma"]
+  }
+  
+  # Random effects
+  if(glm == T){
+    phi <- matrix(0, nrow = nrow(beta), ncol = nrow(X))
+  } else{
+    phi <- as.matrix(fit)[, phi_names]
+  }
+  
+  # Compute covar effects
+  covar_noint <- apply(beta, 1, function(x) X %*% x)
+  covar_int <- apply(
+    cbind(gamma, beta), 1, function(x) x[1] + X %*% x[-1]
+  )
+  
+  # Compute actual correlations
+  n_a <- nrow(X)
+  ## Correlation without intercept
+  cor_noint <- apply(
+    cbind(t(covar_noint), phi), 1, function(x) cor(x[1:n_a], x[(n_a+1):(2*n_a)])
+  )
+  ## Correlation WITH intercept
+  cor_int <- apply(
+    cbind(t(covar_int), phi), 1, function(x) cor(x[1:n_a], x[(n_a+1):(2*n_a)])
+  )
+  
+  return(
+    list(covar_noint = t(covar_noint), cor_int = t(cor_int), phi = phi,
+         cor_noint = cor_noint, cor_int = cor_int)
+  )
+}
+
+# Compute
+covar_icar <- f_cov_ran(
+  fit = fit_cov_nb_sel_icar_rev, X = d_sel$X_cov, phi_names = phi_names
+)
+covar_car <- f_cov_ran(
+  fit = fit_cov_nb_sel_rev, X = d_sel$X_cov, phi_names = phi_names
+)
+covar_carnoint <- f_cov_ran(
+  fit = fit_cov_nb_noint_sel_rev, X = d_sel$X_cov, phi_names = phi_names, noint = T
+)
+covar_glm <- f_cov_ran(
+  fit = fit_cov_nb_sel_glm_rev, X = d_sel$X_cov, phi_names = phi_names, glm = T
+)
+covar_icar_mor <- f_cov_ran(
+  fit = fit_mor_sel_icar, X = d_sel$X_cov, phi_names = phi_names
+)
+
+# HORIZONTAL correlation, across simulations, for each area
+cor_h_icar <- numeric()
+cor_h_car <- numeric()
+cor_h_carnoint <- numeric()
+cor_h_icar_mor <- numeric()
+for(i in 1:nrow(W_sel)){
+  cor_h_icar[i] <- cor(covar_icar$covar_noint[, i], covar_icar$phi[, i])
+  cor_h_car[i] <- cor(covar_car$covar_noint[, i], covar_car$phi[, i])
+  cor_h_carnoint[i] <- cor(covar_carnoint$covar_noint[, i], covar_carnoint$phi[, i])
+  cor_h_icar_mor[i] <- cor(
+  covar_icar_mor$covar_noint[, i], covar_icar_mor$phi[, i]
+  )
+}
+#
+
+#### CHECK POSTERIOR MARGINAL SAMPLES ####
+
+# Phi names
+phi_names <- sapply(1:d_sel$n, function(x) paste(
+  "phi1[", x, "]", sep = ""
+))
+
+phi_car <- as.matrix(fit_cov_p_sel_c_flat)[,phi_names]
+phi_icar <- as.matrix(fit_cov_nb_sel_icar)[,phi_names]
+
+# Marginal posterior variance of the phis is much higher for ICAR
+apply(phi_car, 2, var) %>% as.numeric() %>% mean()
+apply(phi_icar, 2, var) %>% as.numeric() %>% mean()
+
+# phi1 <- apply(phi_car, 2, var) %>% as.numeric()
+# phi2 <- apply(phi_icar, 2, var) %>% as.numeric()
+phi1 <- apply(f_phi_car(W_sel, alpha = .47, tau = 16, B = 2E4), 2, var)
+phi2 <- apply(f_phi_intrinsic(W = W_sel, tau = 21, B = 2E4), 2, var)
+
+plot(1:152, phi1, type = "l", col = "red")
+lines(phi2)
+#
+
+#### NO INTERCEPT ####
+

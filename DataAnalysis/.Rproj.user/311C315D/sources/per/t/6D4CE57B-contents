@@ -1,0 +1,41 @@
+raw <- quantile(X_msoa[, "perc_sa"], probs = c(.2, .4, .6, .8))
+mm <- quantile(X_cent[, "perc_sa"], probs = c(.2, .4, .6, .8))
+
+raw_i <- quantile(X_msoa[, "imd"], probs = c(.2, .4, .6, .8))
+mm_i <- quantile(X_cent[, "imd"], probs = c(.2, .4, .6, .8))
+
+x_merge <- merge(
+  X_msoa, cbind(msoa_code = X_msoa$msoa_code, X_cent), by = "msoa_code"
+)
+
+qq <- x_merge %>% as_tibble() %>% 
+  mutate(
+    raw_sa = case_when(
+      perc_sa.x <= raw[1] ~ "1st",
+      perc_sa.x <= raw[2] & perc_sa.x > raw[1] ~ "2nd",
+      perc_sa.x <= raw[3] & perc_sa.x > raw[2] ~ "3rd",
+      perc_sa.x <= raw[4] & perc_sa.x > raw[3] ~ "4th",
+      perc_sa.x > raw[4] ~ "5th"
+    ),
+    mm_sa = case_when(
+      perc_sa.y <= mm[1] ~ "1st",
+      perc_sa.y <= mm[2] & perc_sa.y > mm[1] ~ "2nd",
+      perc_sa.y <= mm[3] & perc_sa.y > mm[2] ~ "3rd",
+      perc_sa.y <= mm[4] & perc_sa.y > mm[3] ~ "4th",
+      perc_sa.y > mm[4] ~ "5th"
+    ),
+    raw_imd = case_when(
+      imd.x <= raw_i[1] ~ "1st",
+      imd.x <= raw_i[2] & imd.x > raw_i[1] ~ "2nd",
+      imd.x <= raw_i[3] & imd.x > raw_i[2] ~ "3rd",
+      imd.x <= raw_i[4] & imd.x > raw_i[3] ~ "4th",
+      imd.x > raw_i[4] ~ "5th"
+    ),
+    mm_imd = case_when(
+      imd.y <= mm_i[1] ~ "1st",
+      imd.y <= mm_i[2] & imd.y > mm_i[1] ~ "2nd",
+      imd.y <= mm_i[3] & imd.y > mm_i[2] ~ "3rd",
+      imd.y <= mm_i[4] & imd.y > mm_i[3] ~ "4th",
+      imd.y > mm_i[4] ~ "5th"
+    )
+  )

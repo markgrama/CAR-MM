@@ -1,0 +1,26 @@
+{
+    "id": "C3EEF33E",
+    "path": "C:/Users/mgram/Repos/MMCAR/DataAnalysis/Models/Review/ICARMM_COV_NB.stan",
+    "project_path": "Models/Review/ICARMM_COV_NB.stan",
+    "type": "stan",
+    "hash": "2537741557",
+    "contents": "",
+    "dirty": false,
+    "created": 1648495646850.0,
+    "source_on_save": false,
+    "relative_order": 5,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "119,21",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1648509365,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1648509365355,
+    "read_only": false,
+    "read_only_alternatives": []
+}

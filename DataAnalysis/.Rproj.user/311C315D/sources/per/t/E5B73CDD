@@ -1,0 +1,26 @@
+{
+    "id": "E5B73CDD",
+    "path": "C:/Users/mgram/Repos/MMCAR/DataAnalysis/Backup/SEL_data_analysis_Review.R",
+    "project_path": "Backup/SEL_data_analysis_Review.R",
+    "type": "r_source",
+    "hash": "1575887984",
+    "contents": "",
+    "dirty": false,
+    "created": 1648495624709.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "1152,0",
+        "scrollLine": "0"
+    },
+    "folds": "0|19|101|0|\n102|37|136|0|\n137|36|171|0|\n172|44|205|0|\n206|36|240|0|\n241|32|280|0|\n281|22|302|0|\n303|13|331|0|\n332|22|360|0|\n361|18|387|0|\n388|22|449|0|\n450|9|515|0|\n516|19|535|0|\n536|19|610|0|\n540|33|544|0|\n546|35|556|0|\n611|27|694|0|\n615|33|619|0|\n621|35|631|0|\n695|22|772|0|\n773|12|860|0|\n861|35|883|0|\n884|44|1044|0|\n1045|47|1126|0|\n1053|61|1093|0|\n1127|38|1149|0|\n1150|18|1152|0|\n",
+    "lastKnownWriteTime": 1647630431,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1648544544492,
+    "read_only": false,
+    "read_only_alternatives": []
+}

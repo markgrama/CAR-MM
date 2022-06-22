@@ -1,0 +1,26 @@
+{
+    "id": "B62AB1BA",
+    "path": "C:/Users/mgram/Repos/MMCAR/DataAnalysis/SEL_analysis_Review.R",
+    "project_path": "SEL_analysis_Review.R",
+    "type": "r_source",
+    "hash": "1222026737",
+    "contents": "",
+    "dirty": false,
+    "created": 1648495614828.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "2,0",
+        "scrollLine": "0"
+    },
+    "folds": "80|19|85|0|\n86|12|111|0|\n112|27|137|0|\n138|12|163|0|\n164|13|189|2|\n207|21|233|0|\n234|9|279|0|\n280|22|336|0|\n345|19|363|0|\n364|12|449|0|\n450|22|525|0|\n",
+    "lastKnownWriteTime": 1648553942,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1648557236802,
+    "read_only": false,
+    "read_only_alternatives": []
+}
